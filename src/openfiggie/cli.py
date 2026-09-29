@@ -6,8 +6,9 @@ import argparse
 import sys
 import time
 
-from .agents import REGISTRY, make_agent
-from .evaluation import run_duplicate, versus_field
+from .agents import DESCRIPTIONS, REGISTRY, make_agent
+from .evaluation import TradeAnalyzer, run_duplicate, versus_field
+from .evaluation.tournament import _unique_labels
 from .game import Game, format_result
 from .rules import GameConfig
 
@@ -51,6 +52,17 @@ def cmd_tournament(args: argparse.Namespace) -> None:
     print(f"({time.perf_counter() - start:.1f}s)")
 
 
+def cmd_analyze(args: argparse.Namespace) -> None:
+    config = _config(args)
+    _check_lineup(args.agents, config)
+    lineup = [(n, REGISTRY[n]) for n in args.agents]
+    analyzer = TradeAnalyzer(config, _unique_labels(args.agents))
+    result = run_duplicate(lineup, args.deals, config, args.seed, observer=analyzer)
+    print(result.table())
+    print()
+    print(analyzer.table())
+
+
 def cmd_matrix(args: argparse.Namespace) -> None:
     config = _config(args)
     pool = [(n, REGISTRY[n]) for n in args.agents]
@@ -64,9 +76,8 @@ def cmd_matrix(args: argparse.Namespace) -> None:
 
 
 def cmd_agents(args: argparse.Namespace) -> None:
-    for name, factory in sorted(REGISTRY.items()):
-        doc = (factory.__doc__ or "").strip().splitlines()
-        print(f"{name:<14}{doc[0] if doc else ''}")
+    for name in sorted(REGISTRY):
+        print(f"{name:<14}{DESCRIPTIONS[name]}")
 
 
 def _check_lineup(names: list[str], config: GameConfig) -> None:
@@ -95,6 +106,11 @@ def main(argv: list[str] | None = None) -> None:
     common(p, "fundamental,naive,random,passive")
     p.add_argument("--deals", type=int, default=200)
     p.set_defaults(func=cmd_tournament)
+
+    p = sub.add_parser("analyze", help="tournament plus PnL decomposition and markouts")
+    common(p, "fundamental,naive,random,passive")
+    p.add_argument("--deals", type=int, default=100)
+    p.set_defaults(func=cmd_analyze)
 
     p = sub.add_parser("matrix", help="each agent vs. a field of each other agent")
     common(p, "fundamental,naive,random,passive")

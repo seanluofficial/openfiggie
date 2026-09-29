@@ -9,6 +9,7 @@ src/openfiggie/
   game.py         Game: tick loop, validation, matching, settlement; Observation, GameResult
   inference.py    exact deck posterior + BeliefTracker (known holdings from trades)
   valuation.py    exact marginal card values (+ Monte Carlo reference)
+  opponent_model.py  particle filter over deck + opponents' hands + types, from order flow
   agents/         Agent interface, baselines, FundamentalAgent
   evaluation/     duplicate tournaments, versus-field matrix, statistics
   cli.py          openfiggie play | tournament | matrix | agents
@@ -56,9 +57,9 @@ distinct, so `n_s ≥ my_current[s] + Σ_opponents known[q][s]`, where `known[q]
 counts cards `q` was seen buying and has not since sold. Decks violating a
 bound are ruled out.
 
-**Not yet modeled:** the *strategic* information in quotes and trades (someone
-bidding hard for hearts probably holds diamonds). That is the week 4 opponent
-model, and the main open research question.
+The *strategic* information in quotes and trades (someone bidding hard for
+hearts probably holds diamonds) is handled separately by `opponent_model.py`; its
+module docstring has the full model, including the MH ratio for the deck move.
 
 **Finding:** from its own 10-card hand, a player puts on average only 0.29
 probability on the true goal suit (uniform: 0.25). Most of the edge must come

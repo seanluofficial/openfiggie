@@ -19,11 +19,13 @@ from dataclasses import dataclass
 
 from ..agents.base import Agent
 from ..cards import deal
-from ..game import Game
+from ..game import Game, GameResult
 from ..rules import GameConfig
 from .stats import Estimate, estimate
 
 AgentFactory = Callable[[], Agent]
+# Called after every game with the result and seat_of[i] = seat of lineup entry i.
+GameObserver = Callable[[GameResult, Sequence[int]], None]
 
 
 @dataclass(frozen=True)
@@ -64,6 +66,7 @@ def run_duplicate(
     config: GameConfig | None = None,
     seed: int = 0,
     progress: Callable[[int], None] | None = None,
+    observer: GameObserver | None = None,
 ) -> MatchResult:
     """Play ``n_deals`` deals, each once per seat rotation. ``lineup`` has one entry per seat."""
     config = config or GameConfig()
@@ -84,6 +87,8 @@ def run_duplicate(
             for i, (_, factory) in enumerate(lineup):
                 agents[seat_of[i]] = factory()
             result = Game(agents, config, seed=deal_seed, deck=deck, hands=hands).play()
+            if observer:
+                observer(result, seat_of)
             for i in range(n):
                 totals[i] += result.pnl[seat_of[i]]
                 rejected[i] += result.rejected_actions[seat_of[i]]

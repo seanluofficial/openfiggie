@@ -53,4 +53,8 @@ multi-agent systems, games, or AI in finance; arXiv preprint first.
   within 0.015 in every bin with n > 1,000 (50k deals).
 - Fundamental +29.8, naive +16.3, passive −14.5, random −31.7 chips/game
   (200 deals × 4 rotations).
-- Naive vs. a field of fundamental: +10.7 ± 6.4 → motivates opponent modeling.
+- Adverse selection: fundamental's maker markout is −2.7 chips/fill vs. naive.
+- Particle filter (temper 0.08) raises mean P(true goal) at tick 160 from 0.318 to
+  0.392 while staying calibrated; log score −1.216 → −1.136.
+- bayes − fundamental on identical deals: +0.8 to +2.7 across 4 fields, not yet
+  significant at 60 deals.

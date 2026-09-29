@@ -28,6 +28,20 @@ class Trade:
     price: int
     buyer: int
     seller: int
+    aggressor: int  # the player who crossed the spread (buyer or seller)
+    seq: int = 0  # position in the combined quote/trade event stream
+
+
+@dataclass(frozen=True)
+class QuoteEvent:
+    """A quote that was posted (``price`` set) or cancelled (``price`` None)."""
+
+    tick: int
+    player: int
+    suit: Suit
+    side: Side
+    price: int | None
+    seq: int = 0
 
 
 @dataclass(frozen=True)
@@ -42,6 +56,7 @@ class Observation:
     hand_sizes: tuple[int, ...]
     book: BookSnapshot
     trades: tuple[Trade, ...]
+    quotes: tuple[QuoteEvent, ...]
 
 
 @dataclass(frozen=True)
@@ -51,6 +66,7 @@ class GameResult:
     initial_hands: tuple[Counts, ...]
     final_hands: tuple[Counts, ...]
     trades: tuple[Trade, ...]
+    quotes: tuple[QuoteEvent, ...]
     chips_before_settlement: tuple[int, ...]
     payouts: tuple[float, ...]
     pnl: tuple[float, ...]
@@ -99,6 +115,9 @@ class Game:
         self.book = OrderBook()
         self.trades: list[Trade] = []
         self._trades_view: tuple[Trade, ...] = ()
+        self._seq = 0
+        self.quotes: list[QuoteEvent] = []
+        self._quotes_view: tuple[QuoteEvent, ...] = ()
         self.rejected = [0] * self.config.n_players
         self.tick = 0
 
@@ -127,6 +146,7 @@ class Game:
             initial_hands=self.initial_hands,
             final_hands=final_hands,  # type: ignore[arg-type]
             trades=tuple(self.trades),
+            quotes=tuple(self.quotes),
             chips_before_settlement=tuple(self.chips),
             payouts=payouts,
             pnl=tuple(c + pay - start for c, pay in zip(self.chips, payouts, strict=True)),
@@ -146,6 +166,7 @@ class Game:
             hand_sizes=tuple(sum(h) for h in self.hands),
             book=self.book.snapshot(),
             trades=self._trades_view,
+            quotes=self._quotes_view,
         )
 
     def apply(self, p: int, action: Action) -> bool:
@@ -159,11 +180,12 @@ class Game:
             if ask is not None and price >= ask.price:
                 if ask.player == p:
                     return False
-                return self._trade(s, ask.price, buyer=p, seller=ask.player)
+                return self._trade(s, ask.price, buyer=p, seller=ask.player, aggressor=p)
             bid = book.bids[s]
             if bid is not None and price <= bid.price:
                 return False
             book.bids[s] = Quote(p, price)
+            self._log_quote(p, s, Side.BID, price)
             return True
 
         if isinstance(action, Offer):
@@ -174,24 +196,25 @@ class Game:
             if bid is not None and price <= bid.price:
                 if bid.player == p:
                     return False
-                return self._trade(s, bid.price, buyer=bid.player, seller=p)
+                return self._trade(s, bid.price, buyer=bid.player, seller=p, aggressor=p)
             ask = book.asks[s]
             if ask is not None and price >= ask.price:
                 return False
             book.asks[s] = Quote(p, price)
+            self._log_quote(p, s, Side.ASK, price)
             return True
 
         if isinstance(action, Buy):
             ask = book.asks[action.suit]
             if ask is None or ask.player == p:
                 return False
-            return self._trade(action.suit, ask.price, buyer=p, seller=ask.player)
+            return self._trade(action.suit, ask.price, buyer=p, seller=ask.player, aggressor=p)
 
         if isinstance(action, Sell):
             bid = book.bids[action.suit]
             if bid is None or bid.player == p:
                 return False
-            return self._trade(action.suit, bid.price, buyer=bid.player, seller=p)
+            return self._trade(action.suit, bid.price, buyer=bid.player, seller=p, aggressor=p)
 
         if isinstance(action, Cancel):
             quotes = book.bids if action.side is Side.BID else book.asks
@@ -199,20 +222,27 @@ class Game:
             if q is None or q.player != p:
                 return False
             quotes[action.suit] = None
+            self._log_quote(p, action.suit, action.side, None)
             return True
 
         return False
 
     # -- internals --------------------------------------------------------
 
-    def _trade(self, suit: Suit, price: int, buyer: int, seller: int) -> bool:
+    def _log_quote(self, p: int, suit: Suit, side: Side, price: int | None) -> None:
+        self._seq += 1
+        self.quotes.append(QuoteEvent(self.tick, p, suit, side, price, self._seq))
+        self._quotes_view = tuple(self.quotes)
+
+    def _trade(self, suit: Suit, price: int, buyer: int, seller: int, aggressor: int) -> bool:
         if self.chips[buyer] < price or self.hands[seller][suit] < 1:
             return False
         self.chips[buyer] -= price
         self.chips[seller] += price
         self.hands[buyer][suit] += 1
         self.hands[seller][suit] -= 1
-        self.trades.append(Trade(self.tick, suit, price, buyer, seller))
+        self._seq += 1
+        self.trades.append(Trade(self.tick, suit, price, buyer, seller, aggressor, self._seq))
         self._trades_view = tuple(self.trades)
         self.book.clear()
         return True

@@ -25,9 +25,11 @@ four-minute game, which makes it a compact benchmark for multi-agent trading.
 | `passive`: never trades | −14.5 [−16.2, −12.8] |
 | `random`: random orders | −31.7 [−34.8, −28.6] |
 
-Open problem: against a *field* of `fundamental` agents, `naive` still earns
-+10.7 ± 6.4, because `fundamental` ignores what other players' bids reveal.
-Opponent modeling is next; see the [roadmap](docs/ROADMAP.md).
+In progress: `bayes` adds a particle-filter opponent model that reads order
+flow. It makes goal-suit beliefs sharper while keeping them calibrated
+(mean P(true goal) 0.32 → 0.39 by tick 160), and it is ahead of `fundamental` in
+every opponent field tested so far, though not yet significantly. See the
+[roadmap](docs/ROADMAP.md).
 
 ## Quickstart
 
@@ -38,10 +40,13 @@ uv sync
 uv run openfiggie play -v                     # one game, every trade printed
 uv run openfiggie tournament --deals 200      # duplicate evaluation
 uv run openfiggie matrix --deals 50           # each agent vs. a field of each other
+uv run openfiggie analyze --deals 100         # + luck/trading split, maker/taker markouts
 uv run openfiggie agents                      # list agents
 uv run pytest                                 # tests
 uv run python experiments/calibration.py      # posterior calibration
 uv run python experiments/baselines.py        # headline tables -> results/
+uv run python experiments/belief_quality.py   # does reading order flow sharpen beliefs?
+uv run python experiments/opponent_modeling.py --field naive,naive,naive
 ```
 
 Choose a lineup with `--agents fundamental,naive,naive,random`; `--players 5` for

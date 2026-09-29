@@ -35,3 +35,26 @@ def test_duplicate_is_zero_sum_per_deal():
     for row in result.scores:
         assert sum(row) == pytest.approx(0)
     assert result.n_games == 20
+
+
+def test_trade_analyzer_decomposes_pnl_exactly():
+    from openfiggie.agents import FundamentalAgent, NaiveAgent
+    from openfiggie.evaluation import TradeAnalyzer
+
+    lineup = [
+        ("fundamental", FundamentalAgent),
+        ("naive", NaiveAgent),
+        ("random", RandomAgent),
+        ("passive", PassiveAgent),
+    ]
+    analyzer = TradeAnalyzer(FAST, [name for name, _ in lineup])
+    result = run_duplicate(lineup, n_deals=3, config=FAST, observer=analyzer)
+    for i, (name, _) in enumerate(lineup):
+        st = analyzer.stats[name]
+        total = sum(a + b for a, b in zip(st.luck, st.trading, strict=True)) / len(st.luck)
+        assert total == pytest.approx(result.estimate(i).mean)
+    assert analyzer.stats["passive"].maker == analyzer.stats["passive"].taker == []
+    # Every trade has exactly one maker and one taker.
+    makers = sum(len(analyzer.stats[n].maker) for n, _ in lineup)
+    takers = sum(len(analyzer.stats[n].taker) for n, _ in lineup)
+    assert makers == takers > 0
